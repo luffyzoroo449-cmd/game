@@ -46,6 +46,22 @@ const GameRenderer = (entities) => {
                 if (!e.isAlive) return;
                 const skin = SKINS.find(s => s.id === (entities.skinId ?? 'default'));
                 const color = skin?.color ?? '#7c3aed';
+
+                // Render dash trail (ghosts)
+                if (e.dashTrail) {
+                    e.dashTrail.forEach(t => {
+                        elements.push(
+                            <View key={t.id} style={[styles.player, {
+                                left: t.x - PLAYER.WIDTH / 2,
+                                top: t.y - PLAYER.HEIGHT / 2,
+                                backgroundColor: color,
+                                opacity: t.opacity,
+                                borderColor: 'transparent'
+                            }]} />
+                        );
+                    });
+                }
+
                 elements.push(
                     <View key={key} style={[styles.player, { left: x - PLAYER.WIDTH / 2, top: y - PLAYER.HEIGHT / 2, backgroundColor: '#0f172a', borderColor: color, transform: [{ scaleX: e.isFacingRight ? 1 : -1 }] }]}>
                         {/* Shadow Essence (inner glow) */}
@@ -58,11 +74,34 @@ const GameRenderer = (entities) => {
                 break;
             }
             case 'enemy': {
+                const level = entities['gameLevel'] ?? 1;
                 if (e.defeated) return;
-                const color = e.type === 'boss' ? '#ef4444' : e.type === 'advanced' ? '#f97316' : '#94a3b8';
+                const isStalker = e.type === 'shadow_stalker';
+                const color = e.type === 'boss' ? '#ef4444' : isStalker ? '#a855f7' : e.type === 'advanced' ? '#f97316' : '#94a3b8';
+                const isFinalBoss = e.type === 'boss' && level === 100;
+
                 elements.push(
-                    <View key={key} style={[styles.enemy, { left: x - ENEMY.WIDTH / 2, top: y - ENEMY.HEIGHT / 2, backgroundColor: '#1e293b', borderColor: color, transform: [{ scaleX: e.isFacingRight ? 1 : -1 }] }]}>
+                    <View key={key} style={[styles.enemy, {
+                        left: x - ENEMY.WIDTH / 2,
+                        top: y - ENEMY.HEIGHT / 2,
+                        backgroundColor: e.isRaging ? '#450a0a' : '#1e293b',
+                        borderColor: color,
+                        opacity: isStalker ? 0.6 : 1,
+                        transform: [
+                            { scaleX: e.isFacingRight ? 1 : -1 },
+                            { scale: isFinalBoss ? 2 : 1 }
+                        ],
+                        shadowColor: e.isRaging ? '#ef4444' : color,
+                        shadowRadius: e.isRaging ? 20 : 0,
+                        shadowOpacity: 0.8,
+                    }]}>
+                        {(isFinalBoss || e.isRaging) && <View style={[styles.aura, { borderColor: e.isRaging ? '#ef4444' : '#a855f7' }]} />}
                         <View style={[styles.enemyEye, { backgroundColor: color }]} />
+                        {e.health > 1 && (
+                            <View style={styles.healthBar}>
+                                <View style={[styles.healthFill, { width: `${(e.health / (isFinalBoss ? 10 : 3)) * 100}%` }]} />
+                            </View>
+                        )}
                     </View>
                 );
                 break;
@@ -73,8 +112,10 @@ const GameRenderer = (entities) => {
                 const h = bounds.max.y - bounds.min.y;
                 const platformColor =
                     e.type === 'moving' ? '#3b82f6' :
-                        e.type === 'crumbling' ? '#78350f' :
-                            e.type === 'bouncy' ? '#10b981' : '#334155';
+                        e.type === 'crumbling' ? '#ef4444' :
+                            e.type === 'bouncy' ? '#fbbf24' :
+                                e.type === 'ice_slide' ? '#0ea5e9' :
+                                    e.type === 'quicksand' ? '#92400e' : '#334155';
 
                 elements.push(
                     <View key={key} style={[styles.platform, {
@@ -94,10 +135,24 @@ const GameRenderer = (entities) => {
                     spikes: '#ef4444', falling_rocks: '#78350f', ice_slide: '#bae6fd',
                     quicksand: '#d97706', fireball: '#f97316', wind_gust: '#e0f2fe',
                     laser_beam: '#f0abfc', ghost_hand: '#c4b5fd', emp_shockwave: '#86efac',
-                    shadow_clone: '#0f172a',
+                    shadow_clone: '#0f172a', shadow_bolt: '#a855f7',
                 };
+                const isBolt = e.type === 'shadow_bolt';
                 elements.push(
-                    <View key={key} style={[styles.trap, { left: x - 12, top: y - 8, backgroundColor: trapColors[e.type] ?? '#ef4444', borderBottomWidth: 2, borderBottomColor: 'rgba(0,0,0,0.5)' }]} />
+                    <View key={key} style={[
+                        styles.trap,
+                        isBolt && { width: 14, height: 14, borderRadius: 7 },
+                        {
+                            left: x - (isBolt ? 7 : 12),
+                            top: y - (isBolt ? 7 : 8),
+                            backgroundColor: trapColors[e.type] ?? '#ef4444',
+                            borderBottomWidth: isBolt ? 0 : 2,
+                            borderBottomColor: 'rgba(0,0,0,0.5)',
+                            shadowColor: isBolt ? '#a855f7' : 'transparent',
+                            shadowRadius: 10,
+                            shadowOpacity: 0.8
+                        }
+                    ]} />
                 );
                 break;
             }
@@ -129,6 +184,39 @@ const GameRenderer = (entities) => {
                     <View key={key} style={[styles.exit, { left: x - 24, top: y - 24 }]}>
                         <View style={[StyleSheet.absoluteFill, { borderRadius: 24, backgroundColor: '#fbbf2433' }]} />
                     </View>
+                );
+                break;
+            }
+            case 'hazard': {
+                let color = '#4b5563';
+                let size = { w: 16, h: 32 };
+                let radius = 4;
+
+                if (e.type === 'icicle') {
+                    color = '#bae6fd';
+                } else if (e.type === 'ember') {
+                    color = '#ef4444';
+                    size = { w: 8, h: 8 };
+                    radius = 2;
+                } else if (e.type === 'void_orb') {
+                    color = '#a855f7';
+                    size = { w: 20, h: 20 };
+                    radius = 10;
+                } else if (e.type === 'debris') {
+                    color = '#475569';
+                    size = { w: 24, h: 24 };
+                }
+
+                elements.push(
+                    <View key={key} style={[styles.hazard, {
+                        left: x - size.w / 2, top: y - size.h / 2,
+                        width: size.w, height: size.h,
+                        backgroundColor: color,
+                        borderRadius: radius,
+                        shadowColor: color,
+                        shadowOpacity: e.type === 'void_orb' ? 0.8 : 0,
+                        shadowRadius: 10,
+                    }]} />
                 );
                 break;
             }
@@ -174,6 +262,26 @@ const styles = StyleSheet.create({
         borderRadius: 3,
         position: 'absolute',
         top: 8, right: 6,
+    },
+    aura: {
+        ...StyleSheet.absoluteFillObject,
+        borderWidth: 2,
+        borderRadius: 6,
+        margin: -4,
+        opacity: 0.6,
+    },
+    healthBar: {
+        position: 'absolute',
+        top: -10,
+        width: '120%',
+        height: 4,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderRadius: 2,
+        overflow: 'hidden',
+    },
+    healthFill: {
+        height: '100%',
+        backgroundColor: '#ef4444',
     },
     platform: {
         position: 'absolute',
@@ -221,6 +329,11 @@ const styles = StyleSheet.create({
     },
     particle: {
         position: 'absolute',
+    },
+    hazard: {
+        position: 'absolute',
+        width: 16,
+        height: 32,
     },
 });
 

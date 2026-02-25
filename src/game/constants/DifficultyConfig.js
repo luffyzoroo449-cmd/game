@@ -60,6 +60,7 @@ export const RANKS = [
     { name: 'Gold', minXP: 1500 },
     { name: 'Diamond', minXP: 4000 },
     { name: 'Shadow Legend', minXP: 10000 },
+    { name: 'Shadow Emperor', minXP: 25000 },
 ];
 
 export function getRank(totalXP) {

@@ -12,6 +12,7 @@ import LevelCompleteScreen from './src/screens/LevelCompleteScreen';
 import GameOverScreen from './src/screens/GameOverScreen';
 import ShopScreen from './src/screens/ShopScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import MissionScreen from './src/screens/MissionScreen';
 
 const Stack = createStackNavigator();
 
@@ -31,6 +32,7 @@ export default function App() {
           <Stack.Screen name="GameOver" component={GameOverScreen} />
           <Stack.Screen name="Shop" component={ShopScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Missions" component={MissionScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

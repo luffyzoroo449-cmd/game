@@ -43,10 +43,10 @@ function buildWorld(worldId) {
             gravityScale: meta.gravityScale,
             isBoss,
             platforms: [
-                { x: 0, y: 420, w: 180, h: 16, type: 'static' },
-                { x: 220, y: 370, w: 100, h: 16, type: i >= 3 ? 'moving' : 'static', moveAxis: 'x', range: 60, speed: 1 + i * 0.1 },
-                { x: 360, y: 320, w: 100, h: 16, type: i >= 5 ? 'crumbling' : 'static' },
-                { x: 500, y: 270, w: 100, h: 16, type: 'static' },
+                { x: 0, y: 420, w: 180, h: 16, type: worldId === 3 ? 'ice_slide' : 'static' },
+                { x: 220, y: 370, w: 100, h: 16, type: i >= 3 ? 'moving' : (worldId === 6 ? 'bouncy' : 'static'), moveAxis: 'x', range: 60, speed: 1 + i * 0.1 },
+                { x: 360, y: 320, w: 100, h: 16, type: i >= 5 ? 'crumbling' : (worldId === 3 ? 'ice_slide' : 'static') },
+                { x: 500, y: 270, w: 100, h: 16, type: worldId === 6 ? 'bouncy' : 'static' },
                 { x: 640, y: 370, w: 160, h: 16, type: 'static' },
             ],
             enemies: Array.from({ length: isBoss ? 1 : enemyCount }, (_, ei) => ({
@@ -54,6 +54,7 @@ function buildWorld(worldId) {
                 type: isBoss ? 'boss' : (id >= 60 ? 'advanced' : 'patrol'),
                 speed: isBoss ? speed * 1.5 : speed,
                 patrolRange: isBoss ? 200 : 80,
+                health: isBoss ? (worldId === 10 ? 10 : Math.floor(worldId / 2) + 2) : 1,
             })),
             traps: isBoss ? traps.slice(0, 3) : traps,
             coins: Array.from({ length: 10 + i * 2 }, (_, ci) => ({ x: 80 + ci * 45, y: 338 })),

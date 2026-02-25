@@ -1,5 +1,5 @@
 import Matter from 'matter-js';
-import { getEngine } from '../engine/PhysicsWorld';
+import { getEngine, removeBody } from '../engine/PhysicsWorld';
 import { COIN_VALUE, GEM_VALUE } from '../constants/GameConstants';
 
 const CollisionSystem = (entities, { dispatch }) => {
@@ -11,6 +11,8 @@ const CollisionSystem = (entities, { dispatch }) => {
     const collisions = Matter.Query.collides(player.body,
         Object.values(entities).filter(e => e.body && e.label !== 'player').map(e => e.body)
     );
+    player.isGrounded = false;
+    player.standingOnType = null;
 
     collisions.forEach(({ bodyA, bodyB }) => {
         const other = bodyA === player.body ? bodyB : bodyA;
@@ -26,9 +28,21 @@ const CollisionSystem = (entities, { dispatch }) => {
                 const platformTop = other.position.y - (entity.label === 'floor' ? 0 : 8);
                 if (playerBottom <= platformTop + 8 && player.body.velocity.y >= 0) {
                     player.isGrounded = true;
+                    player.standingOnType = entity.type;
+                    if (entity.type === 'crumbling' && !entity.isCrumbling) {
+                        entity.isCrumbling = true;
+                        entity.crumbleTime = 40; // ~0.6s
+                        dispatch({ type: 'spawn_particles', x: other.position.x, y: other.position.y, count: 5, color: '#ef4444', type: 'jump' });
+                    }
                 } else if (Math.abs(player.body.position.x - other.position.x) > (other.bounds.max.x - other.bounds.min.x) / 2 - 4) {
                     // Touching side wall
                     player.wallTouching = player.body.position.x < other.position.x ? 'right' : 'left';
+                }
+
+                if (entity.type === 'bouncy' && player.body.velocity.y > 0) {
+                    Matter.Body.setVelocity(player.body, { x: player.body.velocity.x, y: -14 });
+                    dispatch({ type: 'sfx', name: 'jump' });
+                    dispatch({ type: 'spawn_particles', x: player.body.position.x, y: player.body.position.y + 20, count: 6, color: '#e0f2fe', type: 'jump' });
                 }
                 break;
             }
@@ -58,6 +72,18 @@ const CollisionSystem = (entities, { dispatch }) => {
             }
             case 'trap': {
                 applyDamage(player, dispatch, entity.type === 'instakill' ? player.health : 1);
+                if (entity.type === 'shadow_bolt') {
+                    removeBody(entity.body);
+                    delete entities[key];
+                }
+                break;
+            }
+            case 'hazard': {
+                applyDamage(player, dispatch, entity.damage || 1);
+                dispatch({ type: 'spawn_particles', x: player.body.position.x, y: player.body.position.y, count: 5, color: '#ef4444', type: 'jump' });
+                // Hazards disappear on hit
+                removeBody(entity.body);
+                delete entities[key];
                 break;
             }
             case 'coin': {

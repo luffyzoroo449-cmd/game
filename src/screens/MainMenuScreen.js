@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated, StatusBar } from 'r
 import { LinearGradient } from 'expo-linear-gradient';
 import { useGameStore } from '../store/gameStore';
 import { useAudio } from '../hooks/useAudio';
+import DailyBonusModal from '../components/DailyBonusModal';
 
 export default function MainMenuScreen({ navigation }) {
     const { rank, totalXP, coins, gems } = useGameStore();
@@ -23,7 +24,7 @@ export default function MainMenuScreen({ navigation }) {
 
     const buttons = [
         { label: '▶  PLAY', action: () => navigation.navigate('WorldMap'), primary: true },
-        { label: '🌍  WORLDS', action: () => navigation.navigate('WorldMap') },
+        { label: '🎯  MISSIONS', action: () => navigation.navigate('Missions') },
         { label: '🛒  SHOP', action: () => navigation.navigate('Shop') },
         { label: '⚙️  SETTINGS', action: () => navigation.navigate('Settings') },
     ];
@@ -58,6 +59,7 @@ export default function MainMenuScreen({ navigation }) {
                 </View>
                 <Text style={styles.version}>v1.0.0  •  Shadow Rise Studios</Text>
             </Animated.View>
+            <DailyBonusModal />
         </LinearGradient>
     );
 }

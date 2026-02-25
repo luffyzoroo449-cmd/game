@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Dimensions, Animated } from 'react-native';
 import { GameEngine } from 'react-native-game-engine';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createPhysicsWorld, resetPhysicsWorld } from '../game/engine/PhysicsWorld';
@@ -14,6 +14,7 @@ import AISystem from '../game/systems/AISystem';
 import RewardSystem from '../game/systems/RewardSystem';
 import CheckpointSystem from '../game/systems/CheckpointSystem';
 import ParticleSystem from '../game/systems/ParticleSystem';
+import HazardSystem from '../game/systems/HazardSystem';
 import GameRenderer from '../components/GameRenderer';
 import { useGameStore } from '../store/gameStore';
 import { useAudio } from '../hooks/useAudio';
@@ -29,7 +30,7 @@ export default function GameScreen({ route, navigation }) {
     const world = WORLDS[levelData.world];
     const wc = WORLD_COLORS[world.name] ?? { primary: '#7c3aed', sky: '#0a0a0f' };
 
-    const { completeLevel, activeSkin } = useGameStore();
+    const { completeLevel, activeSkin, progressMission } = useGameStore();
     const { playSFX, playBGM, stopBGM } = useAudio();
     const engineRef = useRef(null);
     const inputRef = useRef({ left: false, right: false, jumpPressed: false, dashPressed: false });
@@ -40,9 +41,19 @@ export default function GameScreen({ route, navigation }) {
     const timeRef = useRef(0);
 
     const skinColor = SKINS.find(s => s.id === activeSkin)?.color ?? '#7c3aed';
+    const introAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.sequence([
+            Animated.timing(introAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+            Animated.delay(1200),
+            Animated.timing(introAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+        ]).start();
+    }, [levelId]);
 
     // Init
     useEffect(() => {
+        const isRevive = route.params?.revive;
         resetPhysicsWorld();
         createPhysicsWorld(levelData.gravityScale);
         const totalCoins = levelData.coins.length;
@@ -50,22 +61,40 @@ export default function GameScreen({ route, navigation }) {
         ents['input'] = inputRef.current;
         ents['gameLevel'] = levelId;
         ents['worldMeta'] = world;
+
+        // If reviving, start at the "start" of the level but keep items
         ents['levelMeta'] = { levelId, totalCoins, spawnPos: { x: (levelData.platforms[0]?.x ?? 0) + 40, y: (levelData.platforms[0]?.y ?? 400) - 60 } };
+
         setEntities(ents);
 
+        if (!isRevive) {
+            setHud({ coins: 0, gems: 0, health: 3, time: 0 });
+            timeRef.current = 0;
+        } else {
+            setHud(h => ({ ...h, health: 3 }));
+        }
+
         playBGM(levelData.bgmKey);
+        if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
             timeRef.current += 1;
             setHud(h => ({ ...h, time: timeRef.current }));
         }, 1000);
+
         return () => { clearInterval(timerRef.current); stopBGM(); resetPhysicsWorld(); };
-    }, [levelId]);
+    }, [levelId, route.params?.revive]);
 
     const handleEvent = useCallback((e) => {
         switch (e.type) {
             case 'sfx': playSFX(e.name); break;
-            case 'coinCollected': setHud(h => ({ ...h, coins: h.coins + e.value })); break;
+            case 'coinCollected':
+                setHud(h => ({ ...h, coins: h.coins + e.value }));
+                progressMission('coins', e.value);
+                break;
             case 'gemCollected': setHud(h => ({ ...h, gems: h.gems + e.value })); break;
+            case 'enemyDefeated':
+                progressMission('enemies', 1);
+                break;
             case 'playerDamaged': setHud(h => ({ ...h, health: e.health })); break;
             case 'playerDied':
                 clearInterval(timerRef.current);
@@ -77,10 +106,11 @@ export default function GameScreen({ route, navigation }) {
             case 'levelReward':
                 clearInterval(timerRef.current);
                 completeLevel(levelId, e.stars, e.xp, e.coins, e.gems);
+                progressMission('levels', 1);
                 navigation.replace('LevelComplete', { levelId, stars: e.stars, xp: e.xp, coins: e.coins, gems: e.gems, timeTaken: e.timeTaken });
                 break;
         }
-    }, [levelId]);
+    }, [levelId, progressMission]);
 
     const [shake, setShake] = useState(0);
     useEffect(() => {
@@ -108,13 +138,20 @@ export default function GameScreen({ route, navigation }) {
                 <GameEngine
                     ref={engineRef}
                     style={{ width: SCREEN.WIDTH, height: SCREEN.HEIGHT }}
-                    systems={[PhysicsSystem, InputSystem, CollisionSystem, AISystem, RewardSystem, CheckpointSystem, ParticleSystem]}
+                    systems={[PhysicsSystem, InputSystem, CollisionSystem, AISystem, RewardSystem, CheckpointSystem, ParticleSystem, HazardSystem]}
                     entities={entities}
                     onEvent={handleEvent}
                     running={!paused}
                     renderer={GameRenderer}
                 />
             </View>
+
+            {/* Level Intro */}
+            <Animated.View style={[styles.introOverlay, { opacity: introAnim, transform: [{ scale: introAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }] }]} pointerEvents="none">
+                <Text style={styles.introLevel}>TRIAL {levelId}</Text>
+                <Text style={styles.introName}>{levelData.name}</Text>
+                <View style={styles.introLine} />
+            </Animated.View>
 
             {/* HUD */}
             <View style={styles.hud} pointerEvents="none">
@@ -202,4 +239,8 @@ const styles = StyleSheet.create({
     pauseTitle: { color: '#a855f7', fontSize: 36, fontWeight: '900', letterSpacing: 6, marginBottom: 10 },
     pauseItem: { paddingHorizontal: 40, paddingVertical: 14, backgroundColor: '#1e1b2e', borderRadius: 12, width: 220, alignItems: 'center' },
     pauseItemText: { color: '#e2e8f0', fontSize: 18, fontWeight: '700', letterSpacing: 1 },
+    introOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 50 },
+    introLevel: { color: '#a855f7', fontSize: 16, fontWeight: '900', letterSpacing: 6, marginBottom: 8 },
+    introName: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 4, textAlign: 'center' },
+    introLine: { width: 100, height: 4, backgroundColor: '#a855f7', marginTop: 12, borderRadius: 2, shadowColor: '#a855f7', shadowRadius: 10, shadowOpacity: 0.8 },
 });

@@ -28,11 +28,16 @@ export default function WorldMapScreen({ navigation }) {
                 {Object.values(WORLDS).map((w) => {
                     const worldColor = WORLD_COLORS[w.name]?.primary ?? '#7c3aed';
                     const active = selectedWorld === w.id;
+                    const worldLevels = getLevelsForWorld(w.id);
+                    const completed = worldLevels.filter(l => levelProgress[l.id]?.stars > 0).length;
+                    const progress = Math.round((completed / worldLevels.length) * 100);
+
                     return (
                         <TouchableOpacity key={w.id} onPress={() => setSelectedWorld(w.id)} activeOpacity={0.8}>
                             <View style={[styles.worldTab, active && { borderColor: worldColor, backgroundColor: worldColor + '33' }]}>
                                 <Text style={[styles.worldTabText, active && { color: worldColor }]}>W{w.id}</Text>
                                 <Text style={styles.worldTabName}>{w.name}</Text>
+                                <Text style={[styles.progressText, active && { color: worldColor }]}>{progress}%</Text>
                             </View>
                         </TouchableOpacity>
                     );
@@ -87,6 +92,7 @@ const styles = StyleSheet.create({
     worldTab: { borderRadius: 10, borderWidth: 2, borderColor: '#334155', padding: 8, alignItems: 'center', minWidth: 60 },
     worldTabText: { color: '#94a3b8', fontWeight: '800', fontSize: 16 },
     worldTabName: { color: '#64748b', fontSize: 10, marginTop: 2 },
+    progressText: { fontSize: 9, color: '#64748b', fontWeight: 'bold' },
     worldTitle: { textAlign: 'center', marginVertical: 12, fontSize: 20, fontWeight: '900', letterSpacing: 4 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 80 },
     levelCard: { width: 100, borderRadius: 14, padding: 12, alignItems: 'center', gap: 4 },

@@ -12,14 +12,24 @@ const defaultSave = {
     rank: 'Bronze',
     currentLevel: 1,
     levelProgress: {},   // { [levelId]: { stars, bestTime, unlocked } }
+    missions: [
+        { id: 'coins_100', label: 'Collect 100 Coins', target: 100, current: 0, reward: 20, claimed: false },
+        { id: 'enemies_5', label: 'Defeat 5 Enemies', target: 5, current: 0, reward: 30, claimed: false },
+        { id: 'levels_3', label: 'Complete 3 Levels', target: 3, current: 0, reward: 50, claimed: false },
+    ],
     ownedSkins: ['default'],
     activeSkin: 'default',
     settings: { music: true, sfx: true },
     isPremium: false,
+    lastClaimedDate: null,
 };
 
 export const useGameStore = create((set, get) => ({
     ...defaultSave,
+
+    addGems: (amt) => { set((s) => ({ gems: s.gems + amt })); get()._persist(); },
+    addCoins: (amt) => { set((s) => ({ coins: s.coins + amt })); get()._persist(); },
+    setClaimedDate: (date) => { set({ lastClaimedDate: date }); get()._persist(); },
 
     // --- Persistence ---
     loadSave: async () => {
@@ -105,6 +115,32 @@ export const useGameStore = create((set, get) => ({
     toggleSFX: () => {
         set((s) => ({ settings: { ...s.settings, sfx: !s.settings.sfx } }));
         get()._persist();
+    },
+
+    // --- Missions ---
+    progressMission: (idPrefix, amount = 1) => {
+        set((s) => ({
+            missions: s.missions.map(m =>
+                m.id.startsWith(idPrefix) && !m.claimed
+                    ? { ...m, current: Math.min(m.target, m.current + amount) }
+                    : m
+            )
+        }));
+        get()._persist();
+    },
+
+    claimMission: (missionId) => {
+        const { missions, addGems } = get();
+        const mission = missions.find(m => m.id === missionId);
+        if (mission && mission.current >= mission.target && !mission.claimed) {
+            addGems(mission.reward);
+            set((s) => ({
+                missions: s.missions.map(m => m.id === missionId ? { ...m, claimed: true } : m)
+            }));
+            get()._persist();
+            return true;
+        }
+        return false;
     },
 
     // --- Premium ---

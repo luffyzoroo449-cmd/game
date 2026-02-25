@@ -16,6 +16,25 @@ const ParticleSystem = (entities, { time, events }) => {
     }
 
     const { list } = entities.particles;
+    const world = entities['worldMeta'];
+
+    // Spawn ambient weather particles
+    if (world && world.weather && world.weather !== 'plain') {
+        const type = world.weather;
+        for (let i = 0; i < 2; i++) {
+            list.push({
+                x: Math.random() * SCREEN.WIDTH,
+                y: -10,
+                vx: type === 'sand' ? -4 - Math.random() * 4 : (Math.random() - 0.5),
+                vy: type === 'rain' ? 10 : (type === 'snow' ? 2 : 3),
+                size: type === 'rain' ? 1 : (type === 'snow' ? 4 : 2),
+                life: 1.0,
+                decay: 0.005,
+                color: type === 'rain' ? '#60a5fa' : (type === 'snow' ? '#ffffff' : (type === 'ash' ? '#4b5563' : (type === 'sand' ? '#f59e0b' : '#a855f7'))),
+                type: 'weather'
+            });
+        }
+    }
 
     // Process incoming particle requests from events
     events.filter(e => e.type === 'spawn_particles').forEach(e => {

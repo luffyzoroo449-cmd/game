@@ -14,14 +14,33 @@ const PhysicsSystem = (entities, { time }) => {
         }
     });
 
-    // Update moving platforms
-    Object.values(entities).forEach((e) => {
-        if (e && e.label === 'platform' && e.type === 'moving' && e.body) {
+    const player = entities['player'];
+    if (player && player.standingOnType === 'quicksand' && player.body) {
+        Matter.Body.setPosition(player.body, {
+            x: player.body.position.x,
+            y: player.body.position.y + 0.8
+        });
+    }
+
+    // Update platforms: moving and crumbling
+    Object.keys(entities).forEach((key) => {
+        const e = entities[key];
+        if (!e || e.label !== 'platform' || !e.body) return;
+
+        if (e.type === 'moving') {
             const elapsed = ((time && time.current) || 0) / 1000;
             const offset = Math.sin(elapsed * (e.moveSpeed || 1)) * (e.range || 60);
             const newX = e.moveAxis === 'x' ? e.startX + offset : e.startX;
             const newY = e.moveAxis === 'y' ? e.startY + offset : e.startY;
             Matter.Body.setPosition(e.body, { x: newX, y: newY });
+        }
+
+        if (e.isCrumbling) {
+            e.crumbleTime -= 1;
+            if (e.crumbleTime <= 0) {
+                removeBody(e.body);
+                delete entities[key];
+            }
         }
     });
 
