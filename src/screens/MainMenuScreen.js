@@ -30,43 +30,45 @@ export default function MainMenuScreen({ navigation }) {
     ];
 
     return (
-        <LinearGradient colors={['#0a0a0f', '#12053a', '#0a0a0f']} style={styles.container}>
-            <StatusBar hidden />
-            <Animated.View style={{ opacity: fadeIn, alignItems: 'center' }}>
-                {/* Title */}
-                <Animated.Text style={[styles.title, { transform: [{ scale: pulse }] }]}>SHADOW RISE</Animated.Text>
-                <Text style={styles.subtitle}>The 100 Trials</Text>
+        <View style={{ flex: 1 }}>
+            <LinearGradient colors={['#0a0a0f', '#12053a', '#0a0a0f']} style={styles.container}>
+                <StatusBar hidden />
+                <Animated.View style={{ opacity: fadeIn, alignItems: 'center', width: '100%' }}>
+                    {/* Title */}
+                    <Animated.Text style={[styles.title, { transform: [{ scale: pulse }] }]}>SHADOW RISE</Animated.Text>
+                    <Text style={styles.subtitle}>The 100 Trials</Text>
 
-                {/* Stats bar */}
-                <View style={styles.statsRow}>
-                    <View style={styles.statBadge}><Text style={styles.statIcon}>🪙</Text><Text style={styles.statVal}>{coins}</Text></View>
-                    <View style={styles.statBadge}><Text style={styles.statIcon}>💎</Text><Text style={styles.statVal}>{gems}</Text></View>
-                    <View style={[styles.statBadge, styles.rankBadge]}><Text style={styles.rankText}>{rank}</Text></View>
-                </View>
+                    {/* Stats bar */}
+                    <View style={styles.statsRow}>
+                        <View style={styles.statBadge}><Text style={styles.statIcon}>🪙</Text><Text style={styles.statVal}>{coins}</Text></View>
+                        <View style={styles.statBadge}><Text style={styles.statIcon}>💎</Text><Text style={styles.statVal}>{gems}</Text></View>
+                        <View style={[styles.statBadge, styles.rankBadge]}><Text style={styles.rankText}>{rank}</Text></View>
+                    </View>
 
-                {/* Buttons */}
-                <View style={styles.btnGroup}>
-                    {buttons.map((b, i) => (
-                        <TouchableOpacity key={i} onPress={b.action} activeOpacity={0.8}>
-                            <LinearGradient
-                                colors={b.primary ? ['#7c3aed', '#a855f7'] : ['#1e1b2e', '#2d2a42']}
-                                style={[styles.btn, b.primary && styles.btnPrimary]}
-                            >
-                                <Text style={[styles.btnText, b.primary && styles.btnTextPrimary]}>{b.label}</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-                <Text style={styles.version}>v1.0.0  •  Shadow Rise Studios</Text>
-            </Animated.View>
+                    {/* Buttons */}
+                    <View style={styles.btnGroup}>
+                        {buttons.map((b, i) => (
+                            <TouchableOpacity key={i} onPress={b.action} activeOpacity={0.8}>
+                                <LinearGradient
+                                    colors={b.primary ? ['#7c3aed', '#a855f7'] : ['#1e1b2e', '#2d2a42']}
+                                    style={[styles.btn, b.primary && styles.btnPrimary]}
+                                >
+                                    <Text style={[styles.btnText, b.primary && styles.btnTextPrimary]}>{b.label}</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    <Text style={styles.version}>v1.0.0  •  Shadow Rise Studios</Text>
+                </Animated.View>
+            </LinearGradient>
             <DailyBonusModal />
-        </LinearGradient>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    title: { fontSize: 52, fontWeight: '900', color: '#a855f7', letterSpacing: 6, textShadowColor: '#7c3aed88', textShadowRadius: 24 },
+    title: { fontSize: 52, fontWeight: '900', color: '#a855f7', letterSpacing: 6, textShadowColor: '#7c3aed88', textShadowRadius: 24, textAlign: 'center' },
     subtitle: { fontSize: 16, color: '#94a3b8', letterSpacing: 5, marginBottom: 32 },
     statsRow: { flexDirection: 'row', gap: 12, marginBottom: 36 },
     statBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e1b2e', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, gap: 6 },

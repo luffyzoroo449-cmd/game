@@ -27,8 +27,10 @@ const SCALE = Math.min(SCALE_X, SCALE_Y);
 export default function GameScreen({ route, navigation }) {
     const levelId = route.params?.levelId ?? 1;
     const levelData = getLevel(levelId);
-    const world = WORLDS[levelData.world];
-    const wc = WORLD_COLORS[world.name] ?? { primary: '#7c3aed', sky: '#0a0a0f' };
+
+    // Safely retrieve world data
+    const world = WORLDS[levelData.world] || WORLDS[1];
+    const wc = WORLD_COLORS[world.name] || { primary: '#7c3aed', secondary: '#a855f7', bg: '#0a0a0f' };
 
     const { completeLevel, activeSkin, progressMission } = useGameStore();
     const { playSFX, playBGM, stopBGM } = useAudio();
@@ -37,6 +39,7 @@ export default function GameScreen({ route, navigation }) {
     const [entities, setEntities] = useState(null);
     const [hud, setHud] = useState({ coins: 0, gems: 0, health: 3, time: 0 });
     const [paused, setPaused] = useState(false);
+    const [shake, setShake] = useState(0);
     const timerRef = useRef(null);
     const timeRef = useRef(0);
 
@@ -51,74 +54,97 @@ export default function GameScreen({ route, navigation }) {
         ]).start();
     }, [levelId]);
 
-    // Init
+    // Init Level
     useEffect(() => {
-        const isRevive = route.params?.revive;
-        resetPhysicsWorld();
-        createPhysicsWorld(levelData.gravityScale);
-        const totalCoins = levelData.coins.length;
-        const ents = loadLevel(levelData, skinColor);
-        ents['input'] = inputRef.current;
-        ents['gameLevel'] = levelId;
-        ents['worldMeta'] = world;
+        let mounted = true;
 
-        // If reviving, start at the "start" of the level but keep items
-        ents['levelMeta'] = { levelId, totalCoins, spawnPos: { x: (levelData.platforms[0]?.x ?? 0) + 40, y: (levelData.platforms[0]?.y ?? 400) - 60 } };
+        const init = async () => {
+            const isRevive = route.params?.revive;
+            resetPhysicsWorld();
+            createPhysicsWorld(levelData.gravityScale);
 
-        setEntities(ents);
+            const totalCoins = levelData.coins?.length || 0;
+            const ents = loadLevel(levelData, skinColor);
 
-        if (!isRevive) {
-            setHud({ coins: 0, gems: 0, health: 3, time: 0 });
-            timeRef.current = 0;
-        } else {
-            setHud(h => ({ ...h, health: 3 }));
-        }
+            if (ents) {
+                ents['input'] = inputRef.current;
+                ents['gameLevel'] = levelId;
+                ents['worldMeta'] = world;
+                ents['levelMeta'] = {
+                    levelId,
+                    totalCoins,
+                    spawnPos: {
+                        x: (levelData.platforms[0]?.x ?? 0) + 40,
+                        y: (levelData.platforms[0]?.y ?? 400) - 60
+                    }
+                };
 
-        playBGM(levelData.bgmKey);
+                if (mounted) {
+                    setEntities(ents);
+                    if (!isRevive) {
+                        setHud({ coins: 0, gems: 0, health: 3, time: 0 });
+                        timeRef.current = 0;
+                    } else {
+                        setHud(h => ({ ...h, health: 3 }));
+                    }
+
+                    playBGM(world.bgmKey || 'forest_theme');
+                }
+            }
+        };
+
+        init();
+
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
-            timeRef.current += 1;
-            setHud(h => ({ ...h, time: timeRef.current }));
+            if (!paused) timeRef.current += 1;
         }, 1000);
 
-        return () => { clearInterval(timerRef.current); stopBGM(); resetPhysicsWorld(); };
+        return () => {
+            mounted = false;
+            clearInterval(timerRef.current);
+            stopBGM();
+        };
     }, [levelId, route.params?.revive]);
+
+    // HUD Sync
+    useEffect(() => {
+        const hInterval = setInterval(() => {
+            if (entities && entities['player']) {
+                const p = entities['player'];
+                setHud(prev => ({
+                    ...prev,
+                    coins: p.coins || 0,
+                    gems: p.gems || 0,
+                    health: p.health || 0,
+                    time: timeRef.current
+                }));
+            }
+        }, 100);
+        return () => clearInterval(hInterval);
+    }, [entities]);
 
     const handleEvent = useCallback((e) => {
         switch (e.type) {
             case 'sfx': playSFX(e.name); break;
-            case 'coinCollected':
-                setHud(h => ({ ...h, coins: h.coins + e.value }));
-                progressMission('coins', e.value);
-                break;
-            case 'gemCollected': setHud(h => ({ ...h, gems: h.gems + e.value })); break;
-            case 'enemyDefeated':
-                progressMission('enemies', 1);
-                break;
-            case 'playerDamaged': setHud(h => ({ ...h, health: e.health })); break;
-            case 'playerDied':
-                clearInterval(timerRef.current);
-                setTimeout(() => navigation.replace('GameOver', { levelId }), 1500);
-                break;
-            case 'shake':
-                setShake(e.intensity || 5);
-                break;
-            case 'levelReward':
-                clearInterval(timerRef.current);
-                completeLevel(levelId, e.stars, e.xp, e.coins, e.gems);
+            case 'shake': setShake(e.intensity || 5); setTimeout(() => setShake(0), 200); break;
+            case 'levelComplete': {
+                const finalCoins = entities['player']?.coins || 0;
+                const finalGems = entities['player']?.gems || 0;
+                const stars = e.stars || 1;
+                completeLevel(levelId, stars, e.xp || 0, finalCoins, finalGems);
                 progressMission('levels', 1);
-                navigation.replace('LevelComplete', { levelId, stars: e.stars, xp: e.xp, coins: e.coins, gems: e.gems, timeTaken: e.timeTaken });
+                navigation.replace('LevelComplete', { levelId, stars, xp: e.xp, coins: finalCoins, gems: finalGems });
                 break;
+            }
+            case 'gameOver': {
+                navigation.replace('GameOver', { levelId });
+                break;
+            }
+            case 'collectCoin': progressMission('coins', 1); break;
+            case 'defeatEnemy': progressMission('enemies', 1); break;
         }
-    }, [levelId, progressMission]);
-
-    const [shake, setShake] = useState(0);
-    useEffect(() => {
-        if (shake > 0) {
-            const timer = setTimeout(() => setShake(s => Math.max(0, s - 1)), 50);
-            return () => clearTimeout(timer);
-        }
-    }, [shake]);
+    }, [levelId, entities, completeLevel, navigation, playSFX, progressMission]);
 
     useEffect(() => {
         if (entities) {
@@ -126,14 +152,19 @@ export default function GameScreen({ route, navigation }) {
         }
     }, [shake, entities]);
 
-    if (!entities) return <View style={[styles.loading, { backgroundColor: wc.bg ?? '#0a0a0f' }]}><Text style={styles.loadingText}>Loading...</Text></View>;
+    if (!entities) {
+        return (
+            <View style={[styles.loading, { backgroundColor: wc.bg }]}>
+                <Text style={styles.loadingText}>LOADING TRIAL...</Text>
+            </View>
+        );
+    }
 
     const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
     return (
         <View style={styles.root}>
             <StatusBar hidden />
-            {/* Game canvas */}
             <View style={[styles.canvas, { transform: [{ scale: SCALE }], transformOrigin: 'top left' }]}>
                 <GameEngine
                     ref={engineRef}
@@ -146,23 +177,21 @@ export default function GameScreen({ route, navigation }) {
                 />
             </View>
 
-            {/* Level Intro */}
             <Animated.View style={[styles.introOverlay, { opacity: introAnim, transform: [{ scale: introAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }] }]} pointerEvents="none">
                 <Text style={styles.introLevel}>TRIAL {levelId}</Text>
                 <Text style={styles.introName}>{levelData.name}</Text>
-                <View style={styles.introLine} />
+                <View style={[styles.introLine, { backgroundColor: wc.primary }]} />
             </Animated.View>
 
-            {/* HUD */}
             <View style={styles.hud} pointerEvents="none">
                 <View style={styles.hudLeft}>
                     {Array.from({ length: 3 }).map((_, i) => (
-                        <Text key={i} style={{ fontSize: 20, opacity: i < hud.health ? 1 : 0.25 }}>❤️</Text>
+                        <Text key={i} style={{ fontSize: 20, opacity: i < hud.health ? 1 : 0.2 }}>❤️</Text>
                     ))}
                 </View>
                 <View style={styles.hudCenter}>
                     <Text style={styles.hudTimer}>{fmt(hud.time)}</Text>
-                    <Text style={styles.hudLevel}>Level {levelId} – {levelData.isBoss ? '👑 BOSS' : world.name}</Text>
+                    <Text style={styles.hudLevel}>{world.name} – {levelId}</Text>
                 </View>
                 <View style={styles.hudRight}>
                     <Text style={styles.hudStat}>🪙 {hud.coins}</Text>
@@ -170,9 +199,7 @@ export default function GameScreen({ route, navigation }) {
                 </View>
             </View>
 
-            {/* D-Pad + Action buttons */}
             <View style={styles.controls} pointerEvents="box-none">
-                {/* Left / Right */}
                 <View style={styles.dpad}>
                     <TouchableOpacity style={styles.ctrlBtn}
                         onPressIn={() => { inputRef.current.left = true; }}
@@ -185,7 +212,6 @@ export default function GameScreen({ route, navigation }) {
                         <Text style={styles.ctrlText}>▶</Text>
                     </TouchableOpacity>
                 </View>
-                {/* Jump + Dash + Pause */}
                 <View style={styles.actionBtns}>
                     <TouchableOpacity style={styles.pauseBtn} onPress={() => setPaused(p => !p)}>
                         <Text style={styles.ctrlTextSm}>{paused ? '▶' : '⏸'}</Text>
@@ -195,19 +221,21 @@ export default function GameScreen({ route, navigation }) {
                         <Text style={styles.ctrlText}>💨</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.ctrlBtn, styles.jumpBtn]}
-                        onPress={() => { inputRef.current.jumpPressed = true; setTimeout(() => { inputRef.current.jumpPressed = false; }, 80); }}>
+                        onPress={() => { inputRef.current.jumpPressed = true; setTimeout(() => { inputRef.current.jumpPressed = false; }, 100); }}>
                         <Text style={styles.ctrlText}>▲</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
-            {/* Pause overlay */}
             {paused && (
                 <View style={styles.pauseOverlay}>
                     <Text style={styles.pauseTitle}>PAUSED</Text>
-                    <TouchableOpacity style={styles.pauseItem} onPress={() => setPaused(false)}><Text style={styles.pauseItemText}>▶  Resume</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.pauseItem} onPress={() => navigation.replace('Game', { levelId })}><Text style={styles.pauseItemText}>↺  Restart</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.pauseItem} onPress={() => { stopBGM(); navigation.replace('MainMenu'); }}><Text style={styles.pauseItemText}>⌂  Main Menu</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.resumeBtn} onPress={() => setPaused(false)}>
+                        <Text style={styles.resumeText}>RESUME</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.exitBtn} onPress={() => { stopBGM(); navigation.replace('MainMenu'); }}>
+                        <Text style={styles.exitText}>QUIT</Text>
+                    </TouchableOpacity>
                 </View>
             )}
         </View>
@@ -217,30 +245,32 @@ export default function GameScreen({ route, navigation }) {
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#000' },
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    loadingText: { color: '#a855f7', fontSize: 22, fontWeight: '700' },
-    canvas: { position: 'absolute', top: 0, left: 0 },
-    hud: { position: 'absolute', top: 10, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16 },
+    loadingText: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 4 },
+    canvas: { width: SCREEN.WIDTH, height: SCREEN.HEIGHT, backgroundColor: '#000' },
+    hud: { position: 'absolute', top: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
     hudLeft: { flexDirection: 'row', gap: 4 },
     hudCenter: { alignItems: 'center' },
-    hudTimer: { color: '#e2e8f0', fontWeight: '800', fontSize: 18, letterSpacing: 2 },
-    hudLevel: { color: '#94a3b8', fontSize: 11, letterSpacing: 1 },
-    hudRight: { alignItems: 'flex-end', gap: 2 },
-    hudStat: { color: '#e2e8f0', fontWeight: '700', fontSize: 14 },
-    controls: { position: 'absolute', bottom: 20, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
-    dpad: { flexDirection: 'row', gap: 10 },
-    actionBtns: { flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
-    ctrlBtn: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#ffffff22', borderWidth: 2, borderColor: '#ffffff44', justifyContent: 'center', alignItems: 'center' },
-    jumpBtn: { backgroundColor: '#7c3aed55', borderColor: '#a855f7' },
-    dashBtn: { backgroundColor: '#0f766e55', borderColor: '#14b8a6' },
-    pauseBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#ffffff15', borderWidth: 1, borderColor: '#ffffff33', justifyContent: 'center', alignItems: 'center' },
-    ctrlText: { fontSize: 22, color: '#e2e8f0' },
-    ctrlTextSm: { fontSize: 18, color: '#94a3b8' },
-    pauseOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000000cc', justifyContent: 'center', alignItems: 'center', gap: 18 },
-    pauseTitle: { color: '#a855f7', fontSize: 36, fontWeight: '900', letterSpacing: 6, marginBottom: 10 },
-    pauseItem: { paddingHorizontal: 40, paddingVertical: 14, backgroundColor: '#1e1b2e', borderRadius: 12, width: 220, alignItems: 'center' },
-    pauseItemText: { color: '#e2e8f0', fontSize: 18, fontWeight: '700', letterSpacing: 1 },
-    introOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 50 },
-    introLevel: { color: '#a855f7', fontSize: 16, fontWeight: '900', letterSpacing: 6, marginBottom: 8 },
-    introName: { color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 4, textAlign: 'center' },
-    introLine: { width: 100, height: 4, backgroundColor: '#a855f7', marginTop: 12, borderRadius: 2, shadowColor: '#a855f7', shadowRadius: 10, shadowOpacity: 0.8 },
+    hudTimer: { color: '#fff', fontSize: 24, fontWeight: '900', textShadowColor: '#000', textShadowRadius: 4 },
+    hudLevel: { color: '#94a3b8', fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+    hudRight: { alignItems: 'flex-end' },
+    hudStat: { color: '#fff', fontSize: 14, fontWeight: '800' },
+    controls: { position: 'absolute', bottom: 40, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 30 },
+    dpad: { flexDirection: 'row', gap: 20 },
+    actionBtns: { flexDirection: 'row', gap: 20, alignItems: 'flex-end' },
+    ctrlBtn: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+    jumpBtn: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(124, 58, 237, 0.3)', borderColor: '#7c3aed' },
+    dashBtn: { marginBottom: 10 },
+    pauseBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    ctrlText: { color: '#fff', fontSize: 32 },
+    ctrlTextSm: { color: '#fff', fontSize: 18 },
+    introOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+    introLevel: { color: '#a855f7', fontSize: 14, fontWeight: '900', letterSpacing: 4 },
+    introName: { color: '#fff', fontSize: 32, fontWeight: '900', marginTop: 8, textAlign: 'center' },
+    introLine: { width: 100, height: 4, marginTop: 16, borderRadius: 2 },
+    pauseOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center' },
+    pauseTitle: { color: '#fff', fontSize: 48, fontWeight: '900', letterSpacing: 10, marginBottom: 40 },
+    resumeBtn: { backgroundColor: '#7c3aed', paddingHorizontal: 60, paddingVertical: 16, borderRadius: 30, marginBottom: 20 },
+    resumeText: { color: '#fff', fontSize: 18, fontWeight: '900' },
+    exitBtn: { padding: 10 },
+    exitText: { color: '#94a3b8', fontSize: 14, fontWeight: '700' },
 });

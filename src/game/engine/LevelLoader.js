@@ -27,8 +27,9 @@ export function loadLevel(levelData, skinColor = '#7c3aed') {
     });
 
     // Player spawn (above first platform)
-    const spawnX = levelData.platforms[0]?.x + 40 ?? 60;
-    const spawnY = (levelData.platforms[0]?.y ?? 400) - PLAYER.HEIGHT;
+    const p0 = levelData.platforms[0] || { x: 0, y: 400 };
+    const spawnX = p0.x + 40;
+    const spawnY = p0.y - PLAYER.HEIGHT;
     const playerBody = Matter.Bodies.rectangle(spawnX, spawnY, PLAYER.WIDTH, PLAYER.HEIGHT, {
         label: 'player',
         friction: PLAYER.FRICTION ?? 0.001,

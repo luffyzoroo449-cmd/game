@@ -1,5 +1,5 @@
 import Matter from 'matter-js';
-import { updatePhysics } from '../engine/PhysicsWorld';
+import { updatePhysics, removeBody } from '../engine/PhysicsWorld';
 import { PHYSICS } from '../constants/GameConstants';
 
 const PhysicsSystem = (entities, { time }) => {

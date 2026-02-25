@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useGameStore } from '../store/gameStore';
@@ -6,15 +6,17 @@ import { useGameStore } from '../store/gameStore';
 export default function DailyBonusModal() {
     const { lastClaimedDate, setClaimedDate, addGems } = useGameStore();
     const [visible, setVisible] = useState(false);
-    const scale = new Animated.Value(0);
+    const scale = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
         if (lastClaimedDate !== today) {
-            setTimeout(() => {
+            // Delay for a premium transition feel
+            const timer = setTimeout(() => {
                 setVisible(true);
                 Animated.spring(scale, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true }).start();
             }, 1000);
+            return () => clearTimeout(timer);
         }
     }, [lastClaimedDate]);
 

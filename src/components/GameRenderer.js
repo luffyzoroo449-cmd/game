@@ -5,13 +5,20 @@ import ParallaxBackground from './ParallaxBackground';
 
 // A single unified renderer that draws all entities each frame via react-native-game-engine
 const GameRenderer = (entities) => {
+    if (!entities) return null;
     const elements = [];
-    const worldMeta = entities['worldMeta'] || { name: 'Forest', sky: '#87ceeb' };
+    const worldMeta = entities['worldMeta'] || { name: 'Forest', theme: '#2d5a1b' };
     const screenMeta = entities['screenMeta'] || { shake: 0 };
-    const scrollX = player?.body?.position?.x || 0;
+    const player = entities['player'];
 
-    const shakeX = (Math.random() - 0.5) * screenMeta.shake * 2;
-    const shakeY = (Math.random() - 0.5) * screenMeta.shake * 2;
+    // Safety check to prevent crash if player is temporarily missing
+    if (!player || !player.body) {
+        return <View style={StyleSheet.absoluteFill} />;
+    }
+
+    const scrollX = player.body.position.x || 0;
+    const shakeX = (Math.random() - 0.5) * (screenMeta.shake || 0) * 2;
+    const shakeY = (Math.random() - 0.5) * (screenMeta.shake || 0) * 2;
 
     // Render themed background
     elements.push(<ParallaxBackground key="bg" world={worldMeta} scrollX={scrollX} />);
@@ -44,14 +51,13 @@ const GameRenderer = (entities) => {
         switch (e.label) {
             case 'player': {
                 if (!e.isAlive) return;
-                const skin = SKINS.find(s => s.id === (entities.skinId ?? 'default'));
-                const color = skin?.color ?? '#7c3aed';
+                const color = e.skinColor || '#7c3aed';
 
                 // Render dash trail (ghosts)
                 if (e.dashTrail) {
                     e.dashTrail.forEach(t => {
                         elements.push(
-                            <View key={t.id} style={[styles.player, {
+                            <View key={`trail_${t.id}`} style={[styles.player, {
                                 left: t.x - PLAYER.WIDTH / 2,
                                 top: t.y - PLAYER.HEIGHT / 2,
                                 backgroundColor: color,
@@ -332,8 +338,6 @@ const styles = StyleSheet.create({
     },
     hazard: {
         position: 'absolute',
-        width: 16,
-        height: 32,
     },
 });
 
