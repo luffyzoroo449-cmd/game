@@ -22,7 +22,10 @@
       },
       "package": "com.shadowrise.the100trials",
       "targetSdkVersion": 34,
-      "permissions": ["VIBRATE"]
+      "permissions": [
+        "VIBRATE",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,6 +37,11 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "13a61350-3841-4a93-a350-fe19bb61b281"
+      }
+    }
   }
 }
